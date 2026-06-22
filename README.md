@@ -8,22 +8,8 @@ Pipeline de ingestão e processamento de dados de mercado de criptoativos via **
 
 ## Arquitetura
 
-```
-                          ┌─────────────────────────────────┐
-                          │          MinIO S3                │
-                          │  ┌─────────────────────────────┐│
-                          │  │ Compactação (Iceberg)  Diário││
-                          │  │ Vacuum                  7d  ││
-                          │  └─────────────────────────────┘│
-  API ──► Spark    ──►    │  ┌───┐    ┌───┐    ┌───┐       │──► BI
-CoinGecko Streaming       │  │ B │───►│ S │───►│ G │       │  Streamlit
- (UDF)   R=30s            │  └───┘    └───┘    └───┘       │  Tendências
- 1 worker                 │  JSON     Iceberg   Star       │
-                          │  MOEDA/   Particion. Schema    │
-                          │  DATA-h   Dedup     Enriquec.  │
-                          └─────────────────────────────────┘
-                             Airflow │ Docker │ Spark
-```
+<img width="512" height="512" alt="image" src="https://github.com/user-attachments/assets/5758fe56-7309-4b8d-9eae-2ad97da30fbe" />
+
 
 ---
 
