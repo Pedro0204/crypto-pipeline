@@ -8,7 +8,7 @@ Pipeline de ingestão e processamento de dados de mercado de criptoativos via **
 
 ## Arquitetura
 
-<img width="512" height="512" alt="image" src="https://github.com/user-attachments/assets/5758fe56-7309-4b8d-9eae-2ad97da30fbe" />
+![Arquitetura do pipeline](images/arquitetura.png)
 
 
 ---
