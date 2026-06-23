@@ -86,14 +86,11 @@ services:
       retries: 5
 
   airflow-init:
-    image: apache/airflow:2.10.5-python3.11
+    build:
+      context: ./infra/docker/airflow
+    image: crypto-airflow:2.10.5
     container_name: airflow-init
-    entrypoint: >
-      bash -c "
-        airflow db migrate &&
-        airflow users create --username admin --password admin
-          --firstname Admin --lastname User --role Admin --email admin@local
-      "
+    entrypoint: ["bash", "-c", "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@local"]
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
@@ -105,7 +102,7 @@ services:
       - crypto-net
 
   airflow-webserver:
-    image: apache/airflow:2.10.5-python3.11
+    image: crypto-airflow:2.10.5
     container_name: airflow-webserver
     command: airflow webserver --port 8080
     ports:
@@ -124,7 +121,7 @@ services:
     restart: unless-stopped
 
   airflow-scheduler:
-    image: apache/airflow:2.10.5-python3.11
+    image: crypto-airflow:2.10.5
     container_name: airflow-scheduler
     command: airflow scheduler
     environment:
