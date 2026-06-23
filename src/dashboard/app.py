@@ -10,7 +10,7 @@ import json
 from io import BytesIO
 
 st.set_page_config(page_title="Crypto Pipeline  Dashboard", layout="wide")
-st.title("Crypto Pipeline  Tendências de Criptoativos")
+st.title("Tendências")
 
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
 MINIO_USER = os.getenv("MINIO_ROOT_USER", "minioadmin")

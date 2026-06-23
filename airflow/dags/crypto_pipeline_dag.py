@@ -25,7 +25,7 @@ default_args = {
 
 
 def should_vacuum(**context):
-    if context["execution_date"].weekday() == 6:
+    if context["logical_date"].weekday() == 6:
         return "vacuum"
     return "skip_vacuum"
 
@@ -38,6 +38,7 @@ SPARK_CONF = {
     "spark.hadoop.fs.s3a.path.style.access": "true",
     "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
     "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+    "spark.driver.extraClassPath": "/opt/spark/jars/*",
 }
 
 
@@ -54,7 +55,7 @@ with DAG(
     silver_etl = SparkSubmitOperator(
         task_id="silver_etl",
         application="/jobs/processamento/silver/mercado_silver.py",
-        application_args=["--execution_date", "{{ ds }}"],
+        application_args=["--execution_date", "{{ data_interval_end | ds }}"],
         conn_id=SPARK_CONN,
         conf=SPARK_CONF,
     )
@@ -62,7 +63,7 @@ with DAG(
     gold_etl = SparkSubmitOperator(
         task_id="gold_etl",
         application="/jobs/processamento/gold/metricas_gold.py",
-        application_args=["--execution_date", "{{ ds }}"],
+        application_args=["--execution_date", "{{ data_interval_end | ds }}"],
         conn_id=SPARK_CONN,
         conf=SPARK_CONF,
     )
@@ -72,6 +73,7 @@ with DAG(
         application="/jobs/processamento/maintenance/compaction.py",
         conn_id=SPARK_CONN,
         conf=SPARK_CONF,
+        retries=0,
     )
 
     check_vacuum = BranchPythonOperator(
@@ -84,6 +86,7 @@ with DAG(
         application="/jobs/processamento/maintenance/vacuum.py",
         conn_id=SPARK_CONN,
         conf=SPARK_CONF,
+        retries=0,
     )
 
     skip_vacuum = EmptyOperator(task_id="skip_vacuum")

@@ -71,6 +71,7 @@ def fetch_all_pages() -> list[dict]:
                     "sparkline": "false",
                 },
                 timeout=30,
+                verify=False,
             )
             resp.raise_for_status()
             all_coins.extend(resp.json())
@@ -139,7 +140,7 @@ def main():
     query = (
         rate_stream.writeStream
         .foreachBatch(process_batch)
-        .trigger(processingTime="30 seconds")
+        .trigger(processingTime="5 minutes")
         .start()
     )
 

@@ -34,9 +34,10 @@ def create_spark_session() -> SparkSession:
 
 
 def run(execution_date: str):
+    logger.info(f"[1/5] Iniciando Spark Session — dt={execution_date}")
     spark = create_spark_session()
 
-    logger.info(f"Lendo Bronze para dt={execution_date}")
+    logger.info(f"[2/5] Lendo Bronze — s3a://bronze/coins_markets/dt={execution_date}/")
     df_raw = (
         spark.read
         .option("basePath", "s3a://bronze/coins_markets/")
@@ -44,10 +45,14 @@ def run(execution_date: str):
     )
 
     if df_raw.rdd.isEmpty():
-        logger.warning("Sem dados no Bronze para essa data")
+        logger.warning("Sem dados no Bronze para essa data — abortando")
         spark.stop()
         return
 
+    raw_count = df_raw.count()
+    logger.info(f"[2/5] Bronze lido com sucesso — {raw_count} registros")
+
+    logger.info("[3/5] Aplicando cast de tipos")
     df = (
         df_raw
         .withColumn("current_price", col("current_price").cast("double"))
@@ -62,7 +67,7 @@ def run(execution_date: str):
         .withColumn("_processed_at", current_timestamp())
     )
 
-    # Deduplicação: manter registro mais recente por (id, dt, hour)
+    logger.info("[4/5] Deduplicando por (id, dt, hour) — mantendo ingestion_ts mais recente")
     window = Window.partitionBy("id", "dt", "hour").orderBy(col("ingestion_ts").desc())
     df_dedup = (
         df
@@ -71,15 +76,16 @@ def run(execution_date: str):
         .drop("_rn")
     )
 
-    logger.info(f"Registros antes: {df.count()}, após dedup: {df_dedup.count()}")
+    dedup_count = df_dedup.count()
+    logger.info(f"[4/5] Dedup concluído — antes: {raw_count}, após: {dedup_count}, removidos: {raw_count - dedup_count}")
 
-    # Grava como tabela Iceberg particionada por dt
+    logger.info("[5/5] Gravando tabela Iceberg — iceberg.crypto.coins_markets_silver")
     df_dedup.writeTo("iceberg.crypto.coins_markets_silver") \
         .using("iceberg") \
         .partitionedBy("dt") \
         .createOrReplace()
 
-    logger.info("Silver gravado com sucesso no Iceberg")
+    logger.info("[5/5] Silver gravado com sucesso no Iceberg")
     spark.stop()
 
 
