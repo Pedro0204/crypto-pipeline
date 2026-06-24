@@ -99,6 +99,52 @@ A imagem Spark customizada inclui os JARs do Iceberg (`iceberg-spark-runtime-3.5
 
 Todos os serviços estão conectados pela rede Docker `crypto-net`, permitindo comunicação interna por nomes de container. Os volumes persistentes garantem que os dados do MinIO e do PostgreSQL sobrevivam a reinicializações dos containers.
 
+### 3.6 Estrutura do Projeto
+
+A organização dos arquivos do projeto segue a separação por responsabilidade, com diretórios dedicados para infraestrutura, código-fonte e orquestração:
+
+```
+crypto-pipeline/
+├── docker-compose.yml              # MinIO + Spark + Airflow
+├── .env                            # Variáveis de ambiente
+├── pyproject.toml                  # Dependências Python
+├── run_all.py                      # Automação de inicialização
+├── infra/
+│   ├── docker/
+│   │   ├── spark/Dockerfile        # Spark + Iceberg JARs
+│   │   └── airflow/Dockerfile      # Airflow + Spark provider
+│   └── terraform/                  # Buckets bronze/silver/gold (IaC)
+├── src/
+│   ├── ingestao/
+│   │   └── coingecko_producer.py   # Coletor standalone da API
+│   ├── streaming/
+│   │   └── spark_bronze.py         # Spark Streaming -> Bronze
+│   ├── processamento/
+│   │   ├── silver/
+│   │   │   └── mercado_silver.py   # Bronze -> Silver (Iceberg)
+│   │   ├── gold/
+│   │   │   └── metricas_gold.py    # Silver -> Gold (Star Schema)
+│   │   └── maintenance/
+│   │       ├── compaction.py       # OPTIMIZE diário
+│   │       └── vacuum.py           # Expire snapshots 7d
+│   └── dashboard/
+│       └── app.py                  # Streamlit BI
+└── airflow/
+    └── dags/
+        └── crypto_pipeline_dag.py  # DAG: Silver -> Gold -> Compact -> Vacuum
+```
+
+### 3.7 Serviços e URLs
+
+Todos os serviços do pipeline são acessíveis via navegador após a inicialização com `docker compose up -d`:
+
+| Serviço | URL | Credenciais |
+|---------|-----|-------------|
+| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
+| Spark Master UI | http://localhost:8085 | (sem autenticação) |
+| Apache Airflow | http://localhost:8080 | admin / admin |
+| Streamlit Dashboard | http://localhost:8501 | (sem autenticação) |
+
 ---
 
 ## 4. Explicação Detalhada do Pipeline
@@ -115,6 +161,20 @@ O processo de cada lote segue os passos:
 4. Os dados são gravados em formato JSON no bucket Bronze do MinIO, particionados por `dt` e `hour`.
 
 A ingestão é limitada a um único worker do Spark para respeitar o rate limit da API da CoinGecko (30 requisições por segundo no plano gratuito). Essa decisão garante que não ocorram bloqueios por excesso de requisições.
+
+Os detalhes técnicos da ingestão são resumidos a seguir:
+
+| Parâmetro | Valor |
+|-----------|-------|
+| Arquivo | `src/streaming/spark_bronze.py` |
+| Modo | Spark Structured Streaming |
+| Trigger | Rate source (1 requisição a cada 30s) |
+| Destino | MinIO bucket `bronze/` |
+| Formato | JSON (append-only) |
+| Particionamento | `dt=AAAA-MM-DD` / `hour=HH` |
+| Workers | `local[1]` (rate limit safe) |
+
+Além do módulo de streaming, o projeto conta com o produtor standalone `src/ingestao/coingecko_producer.py`, que encapsula a interação com a API da CoinGecko e pode ser utilizado para testes de coleta de forma independente.
 
 ### 4.2 Processamento Silver
 
@@ -238,6 +298,15 @@ As visualizações disponíveis são:
 
 ### 6.1 Resultados
 
+Os principais indicadores da solução são:
+
+| Indicador | Valor |
+|-----------|-------|
+| Camadas Medallion | 3 (Bronze, Silver, Gold) |
+| Intervalo de ingestão | 30 segundos |
+| Retenção de snapshots | 7 dias |
+| Serviços conteinerizados | 7 (MinIO, Spark Master, Spark Worker, Airflow Webserver, Airflow Scheduler, Airflow PostgreSQL, Airflow Init) |
+
 O pipeline desenvolvido alcançou os seguintes resultados:
 
 - **Ingestão contínua** de dados de até 1.250 criptomoedas a cada 30 segundos, com coleta ininterrupta operando em background via Spark Structured Streaming.
@@ -247,6 +316,8 @@ O pipeline desenvolvido alcançou os seguintes resultados:
 - **Orquestração automatizada** via Airflow, com pipeline diário completo (Silver, Gold, compactação) e manutenção semanal (vacuum), incluindo tratamento de falhas com retentativas.
 - **Painel interativo** com Streamlit e Plotly para visualização de KPIs, rankings por capitalização, variações de preço e métricas horárias por moeda.
 - **Infraestrutura reprodutível** com Docker Compose e provisionamento automatizado de buckets via Terraform.
+
+A execução do pipeline foi validada com sucesso. A DAG do Airflow completou todas as etapas (Silver ETL, Gold ETL, compactação e vacuum) com status de sucesso, conforme verificado na interface web do Airflow. O dashboard Streamlit apresentou corretamente os dados processados, com os gráficos e KPIs operacionais.
 
 ### 6.2 Conclusões
 
